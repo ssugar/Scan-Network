@@ -1,5 +1,5 @@
 # Scan-TcpNetwork
-Powershell Function to Scan a TCP Network to determine if ports are open
+Powershell Function to Scan a TCP Host or Subnet to determine if ports are open
 
 ### Example Command
     .\Scan-TcpNetwork.ps1 -ipInput 192.168.1.1-255 -portInput topTcpPorts.txt -onlyTruFlag 1 -connTimeout 100
