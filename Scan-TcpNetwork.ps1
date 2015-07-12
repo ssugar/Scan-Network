@@ -1,6 +1,7 @@
 ﻿param(
   $ipInput,
   $portInput,
+  $connTimeout=300,
   $onlyTrueFlag=0
 )
 switch -wildcard ($ipInput)
@@ -62,6 +63,24 @@ switch -wildcard ($portInput)
         $x += 1
     }
   }
+  "topTcpPorts.txt"
+  {
+    $portsToQuery = @()
+    $file = Get-Content .\topTcpPorts.txt
+    $lines = $file.split([Environment]::NewLine)
+    foreach($line in $lines)
+    {
+        if($line -match "Service Port")
+        {
+          #discarding header
+        }
+        else
+        {
+            $port = $line.split(" ")
+            $portsToQuery += [int]$port[1]
+        }
+    }
+  }
   default
   {
     $portsToQuery = @()
@@ -77,8 +96,8 @@ foreach($portToQuery in $portsToQuery)
       #$tncoutput = tnc $ip -Port $portToQuery
       $portCheckOutput = New-Object System.Net.Sockets.TcpClient
       $portCheckOutput.BeginConnect($ip, $portToQuery, $null, $null) | Out-Null
-      $Timeout = (Get-Date).AddMilliseconds(300)
-      While (!$portCheckOutput.Connected -and (Get-Date) -lt $Timeout){Sleep -Milliseconds 50}
+      $Timeout = (Get-Date).AddMilliseconds($connTimeout)
+      While (!$portCheckOutput.Connected -and (Get-Date) -lt $Timeout){Sleep -Milliseconds 25}
       if($onlyTrueFlag -eq 1 -AND $portCheckOutput.Connected -eq $true)
       {
         write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected
