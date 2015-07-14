@@ -4,6 +4,7 @@
   $connTimeout=300,
   $onlyTrueFlag=0
 )
+
 switch -wildcard ($ipInput)
 {
     $null
@@ -88,25 +89,38 @@ switch -wildcard ($portInput)
   }
 }
 
+foreach($ip in $ipsToScan)
+{
+    $Ping = New-Object System.Net.NetworkInformation.Ping 
+    $reply = $Ping.Send($ip,$connTimeout) 
+    Write-Debug $reply 
+    If ($onlyTrueFlag -eq 1 -AND $reply.Status -eq "Success")  
+    { 
+        Write-Host $ip "ping response" $reply.Status
+    } 
+    elseif($onlyTrueFlag -eq 0)
+    { 
+        Write-Host $ip "ping response" $reply.Status
+    }   
+}
+
 foreach($portToQuery in $portsToQuery)
 {
     $portToQuery = [int]$portToQuery
     foreach($ip in $ipsToScan)
     {
-      #$tncoutput = tnc $ip -Port $portToQuery
-      $portCheckOutput = New-Object System.Net.Sockets.TcpClient
-      $portCheckOutput.BeginConnect($ip, $portToQuery, $null, $null) | Out-Null
-      $Timeout = (Get-Date).AddMilliseconds($connTimeout)
-      While (!$portCheckOutput.Connected -and (Get-Date) -lt $Timeout){Sleep -Milliseconds 25}
-      if($onlyTrueFlag -eq 1 -AND $portCheckOutput.Connected -eq $true)
-      {
-        write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected
-      }
-      elseif($onlyTrueFlag -eq 0)
-      {
-        write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected
-      }
-
-      $portCheckOutput.Close()
+	    $portCheckOutput = New-Object System.Net.Sockets.TcpClient
+        $portCheckOutput.BeginConnect($ip, $portToQuery, $null, $null) | Out-Null
+        $Timeout = (Get-Date).AddMilliseconds($connTimeout)
+        While (!$portCheckOutput.Connected -and (Get-Date) -lt $Timeout){Sleep -Milliseconds 25}
+        if($onlyTrueFlag -eq 1 -AND $portCheckOutput.Connected -eq $true)
+        {
+          write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected
+        }
+        elseif($onlyTrueFlag -eq 0)
+        {
+          write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected
+        }
+        $portCheckOutput.Close()
     }
 }
