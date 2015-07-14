@@ -131,5 +131,106 @@ function portSweep($ipsToScan, $portsToQuery, $connTimeout, $onlyTrueFlag)
     }
 }
 
+#Taken from http://myitpath.blogspot.com/2010/03/net-and-netbios-name-resolution.html
+function convert-netbiosType([byte]$val) {
+ #note netbios type codes are usually in decimal, but .net likes to deal with bytes
+ #as integers.
+    
+ $myval = [int]$val
+ switch($myval) {
+  0 { return "Workstation" }
+  1 { return "Messenger service" }
+  3 { return "Messenger" }
+  6 { return "RAS" }
+  32 { return "File Service" }
+  27 { return "Domain Master Browser" }
+  28 { return "Domain Controller" }
+  29 { return "Master Browser" }
+  30 { return "Browser election" }
+  31 { return "NetDDE" }
+  33 { return "RAS Client" }
+  34 { return "Exchange MS mail connector" }
+  35 { return "Exchange Store" }
+  36 { return "Exchange Directory" }
+  48 { return "Modem sharing service Server"}
+  49 { return "Modem sharing service Client"}
+  67 { return "SMS client remote control" }
+  68 { return "SMS client remote transfer" }
+  135 { return "Exchange MTA" }
+  default { return "unk" }
+ }
+ 
+}
+
+#Taken from http://myitpath.blogspot.com/2010/03/net-and-netbios-name-resolution.html
+function netBiosSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
+{
+    foreach($ip in $ipsToScan)
+    {
+            
+        $port=137
+        $ipEP = new-object System.Net.IPEndPoint ([system.net.IPAddress]::parse($ip),$port)
+        $udpconn = new-Object System.Net.Sockets.UdpClient
+        [byte[]] $sendbytes = (0xf4,0x53,00,00,00,01,00,00,00,00,00,00,0x20,0x43,0x4b,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41 ,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,00,00,0x21,00,01)
+        $udpconn.client.receivetimeout=1000
+        $bytesSent = $udpconn.Send($sendbytes,50,$ipEP)
+        try
+        {
+            $rcvbytes = $udpconn.Receive([ref]$ipEP)
+        }
+        catch
+        {
+            write-host $ip "is not responding to netbios traffic on port 137, system is not a windows machine, or other error has occurred."
+        }
+        if ($? -eq $true -and $rcvbytes.length -lt 63) 
+        {
+            #write-host $ip "appears to be responding to netbios properly"
+        }
+        else
+        {
+            [array]$nbnames = $null
+            #nbtns query results have a number of returned records field at byte #56 of the returned
+            #udp payload.  Read this value to find how many records we have
+            $startptr = 56
+            $numresults = [int]$rcvbytes[$startptr]
+            $startptr++
+            $namereclen = 18
+            #loop through the number of results and get the names + data
+            #  NETBIOS result =  15 byte of name (padded if shorted 0x20)
+            #                     1 byte of type
+            #                     2 byte of flags
+            for ($i = 0; $i -lt $numresults; $i++)
+            {
+                $nbname = new-object PSObject
+                $tempname = ""
+                #read the 15 byte name and convert to human readable string
+                for ($j = 0; $j -lt $namereclen -3; $j++) 
+                {
+                    $tempname += [char]$rcvbytes[$startptr + ($i * $namereclen) + $j]
+                }
+                add-member -input $nbname NoteProperty NetbiosName $tempname
+                $rectype = convert-netbiosType $rcvbytes[$startptr + ($i * $namereclen) + 15]
+                add-member -input $nbname NoteProperty  RecordType $rectype
+                if (($rcvbytes[$startptr + ($i * $namereclen) + 16] -band 128) -eq 128 ) 
+                {
+                    #in the flags field, only the high order byte of the 2 is used
+                    #the left most bit is the Group name flag which can be used for domain
+                    #name type identification to differentiate the 0x00 type names
+                    $groupflag = 1
+                }
+                else
+                { 
+                    $groupflag = 0
+                }
+                add-member -input $nbname NoteProperty IsGroupType $groupflag
+                $nbnames += $nbname
+            }
+            write-host $ip "netbios names" $nbnames
+            $rcvbytes = $null
+        }
+    }
+}
+
 pingSweep $ipsToScan $connTimeout $onlyTrueFlag
 portSweep $ipsToScan $portsToQuery $connTimeout $onlyTrueFlag
+netBiosSweep $ipsToScan $connTimeout $onlyTrueFlag
