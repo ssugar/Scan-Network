@@ -225,7 +225,11 @@ function netBiosSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
                 add-member -input $nbname NoteProperty IsGroupType $groupflag
                 $nbnames += $nbname
             }
-            write-host $ip "netbios names" $nbnames
+            write-host $ip "netbios names:"
+            foreach($nbitem in $nbnames)
+            {
+                write-host $nbitem
+            }
             $rcvbytes = $null
         }
     }
