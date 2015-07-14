@@ -89,38 +89,47 @@ switch -wildcard ($portInput)
   }
 }
 
-foreach($ip in $ipsToScan)
+function pingSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
 {
-    $Ping = New-Object System.Net.NetworkInformation.Ping 
-    $reply = $Ping.Send($ip,$connTimeout) 
-    Write-Debug $reply 
-    If ($onlyTrueFlag -eq 1 -AND $reply.Status -eq "Success")  
-    { 
-        Write-Host $ip "ping response" $reply.Status
-    } 
-    elseif($onlyTrueFlag -eq 0)
-    { 
-        Write-Host $ip "ping response" $reply.Status
-    }   
-}
-
-foreach($portToQuery in $portsToQuery)
-{
-    $portToQuery = [int]$portToQuery
     foreach($ip in $ipsToScan)
     {
-	    $portCheckOutput = New-Object System.Net.Sockets.TcpClient
-        $portCheckOutput.BeginConnect($ip, $portToQuery, $null, $null) | Out-Null
-        $Timeout = (Get-Date).AddMilliseconds($connTimeout)
-        While (!$portCheckOutput.Connected -and (Get-Date) -lt $Timeout){Sleep -Milliseconds 25}
-        if($onlyTrueFlag -eq 1 -AND $portCheckOutput.Connected -eq $true)
-        {
-          write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected
-        }
+        $Ping = New-Object System.Net.NetworkInformation.Ping 
+        $reply = $Ping.Send($ip,$connTimeout) 
+        Write-Debug $reply 
+        If ($onlyTrueFlag -eq 1 -AND $reply.Status -eq "Success")  
+        { 
+            Write-Host $ip "ping response" $reply.Status
+        } 
         elseif($onlyTrueFlag -eq 0)
-        {
-          write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected
-        }
-        $portCheckOutput.Close()
+        { 
+            Write-Host $ip "ping response" $reply.Status
+        }   
     }
 }
+
+function portSweep($ipsToScan, $portsToQuery, $connTimeout, $onlyTrueFlag)
+{
+    foreach($ip in $ipsToScan)
+    {
+        foreach($portToQuery in $portsToQuery)
+        {
+            $portToQuery = [int]$portToQuery
+            $portCheckOutput = New-Object System.Net.Sockets.TcpClient
+            $portCheckOutput.BeginConnect($ip, $portToQuery, $null, $null) | Out-Null
+            $Timeout = (Get-Date).AddMilliseconds($connTimeout)
+            While (!$portCheckOutput.Connected -and (Get-Date) -lt $Timeout){Sleep -Milliseconds 25}
+            if($onlyTrueFlag -eq 1 -AND $portCheckOutput.Connected -eq $true)
+            {
+              write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected
+            }
+            elseif($onlyTrueFlag -eq 0)
+            {
+              write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected
+            }
+            $portCheckOutput.Close()
+        }
+    }
+}
+
+pingSweep $ipsToScan $connTimeout $onlyTrueFlag
+portSweep $ipsToScan $portsToQuery $connTimeout $onlyTrueFlag
