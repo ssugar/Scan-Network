@@ -200,11 +200,16 @@ function portSweep($ipsToScan, $portsToQuery, $connTimeout, $onlyTrueFlag)
             if($onlyTrueFlag -eq 1 -AND $portCheckOutput.Connected -eq $true)
             {
                 $portNameResult = portLookup $portToQuery
-                write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected "(" $portNameResult ")"
+                write-host $ip "port" $portToQuery "is open (" $portNameResult ")"
             }
-            elseif($onlyTrueFlag -eq 0)
+            elseif($onlyTrueFlag -eq 0 -AND $portCheckOutput.Connected -eq $true)
             {
-              write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected
+                $portNameResult = portLookup $portToQuery
+                write-host $ip "port" $portToQuery "is open (" $portNameResult ")"
+            }
+            elseif($onlyTrueFlag -eq 0 -AND $portCheckOutput.Connected -eq $false)
+            {
+                write-host $ip "port" $portToQuery "is closed"
             }
             $portCheckOutput.Close()
         }
