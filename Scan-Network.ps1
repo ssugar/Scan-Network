@@ -3,7 +3,8 @@
   $portInput,
   $connTimeout=300,
   $onlyTrueFlag=0,
-  $updateOUIFlag=0
+  $updateOuiList=0,
+  $updatePortList=0
 )
 
 switch -wildcard ($ipInput)
@@ -324,11 +325,18 @@ function netBiosSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
     }
 }
 
-if($updateOUIFlag -eq 1)
+if($updateOuiList -eq 1)
 {
     write-host "Downloading/updating the OUI database to the current folder vendorlist.txt, all other options ignored.  This can take a while"
     $url = 'http://standards.ieee.org/develop/regauth/oui/oui.txt'
     $outfile = ".\vendorlist.txt"
+    Invoke-WebRequest -Uri $url -OutFile $outfile
+}
+elseif($updatePortList -eq 1)
+{
+    write-host "Downloading/updating the Port List.  This can take a while"
+    $url = 'http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt'
+    $outfile = ".\fullportlist.txt"
     Invoke-WebRequest -Uri $url -OutFile $outfile
 }
 else
