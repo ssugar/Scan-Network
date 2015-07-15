@@ -174,17 +174,21 @@ function netBiosSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
         [byte[]] $sendbytes = (0xf4,0x53,00,00,00,01,00,00,00,00,00,00,0x20,0x43,0x4b,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41 ,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,00,00,0x21,00,01)
         $udpconn.client.receivetimeout=1000
         $bytesSent = $udpconn.Send($sendbytes,50,$ipEP)
+        $failed = 0
         try
         {
             $rcvbytes = $udpconn.Receive([ref]$ipEP)
         }
         catch
         {
-            write-host $ip "is not responding to netbios traffic on port 137, system is not a windows machine, or other error has occurred."
+            $failed = 1
         }
-        if ($? -eq $true -and $rcvbytes.length -lt 63) 
+        if ($failed -eq 1 -and $rcvbytes.length -lt 63) 
         {
-            #write-host $ip "appears to be responding to netbios properly"
+            if($onlyTrueFlag -eq 0)
+            {
+                write-host $ip "is not responding to netbios requests"
+            }
         }
         else
         {
