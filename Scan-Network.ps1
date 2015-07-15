@@ -135,6 +135,16 @@ function Get-MacFromIP($IPAddress)
     $type::GetMacAddress($IPAddress)
 }
 
+function vendorLookup([string]$mac)
+{
+    $macSegments = $mac.Split(":")
+    $targetString = $macSegments[0] + "-" + $macSegments[1] + "-" + $macSegments[2]
+    $manufacturer = $fileContent | Select-String $targetString -Context 0,0
+    [string]$manName = $manufacturer.ToString()
+    $manNameSegments = $manName -split "`t"
+    return $manNameSegments[2]
+}
+
 function pingSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
 {
     $fileContent = Get-Content -Path ".\vendorlist.txt"
@@ -146,17 +156,16 @@ function pingSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
         If ($onlyTrueFlag -eq 1 -AND $reply.Status -eq "Success")  
         { 
             $mac = Get-MacFromIP $ip
-            Write-Host $ip "host up with MAC:" $mac
             $mac = [string]$mac
-            $macSegments = $mac.Split(":")
-            $targetString = $macSegments[0] + "-" + $macSegments[1] + "-" + $macSegments[2]
-            $manufacturer = $fileContent | Select-String $targetString -Context 0,0
-            write-host $manufacturer
+            $vendorName = vendorLookup $mac
+            Write-Host $ip "host up with MAC:" $mac "(" $vendorName ")"
         } 
         elseif($onlyTrueFlag -eq 0 -AND $reply.Status -eq "Success")
         { 
             $mac = Get-MacFromIP $ip
-            Write-Host $ip "host up with MAC:" $mac 
+            $mac = [string]$mac
+            $vendorName = vendorLookup $mac
+            Write-Host $ip "host up with MAC:" $mac "(" $vendorName ")"
         }
         elseif($reply.Status -eq "TimedOut" -and $onlyTrueFlag -eq 0)
         {
