@@ -174,8 +174,20 @@ function pingSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
     }
 }
 
+function portLookup([int]$port)
+{
+    [string]$portString = [string]$port
+    #add word boundry regex \b to each side of the port to get an exact match
+    $selectString = "\b" + $port + "\b"
+    $portName = $portFileContent | Select-String $selectString -Context 0,0
+    [string]$portName = [string]$portName
+    $portNameSegments = $portName.Split(" ")
+    return $portNameSegments[0]
+}
+
 function portSweep($ipsToScan, $portsToQuery, $connTimeout, $onlyTrueFlag)
 {
+    $portFileContent = Get-Content -Path ".\topTcpPorts.txt"
     foreach($ip in $ipsToScan)
     {
         foreach($portToQuery in $portsToQuery)
@@ -187,7 +199,8 @@ function portSweep($ipsToScan, $portsToQuery, $connTimeout, $onlyTrueFlag)
             While (!$portCheckOutput.Connected -and (Get-Date) -lt $Timeout){Sleep -Milliseconds 25}
             if($onlyTrueFlag -eq 1 -AND $portCheckOutput.Connected -eq $true)
             {
-              write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected
+                $portNameResult = portLookup $portToQuery
+                write-host $ip "test result for port" $portToQuery "was" $portCheckOutput.Connected "(" $portNameResult ")"
             }
             elseif($onlyTrueFlag -eq 0)
             {
