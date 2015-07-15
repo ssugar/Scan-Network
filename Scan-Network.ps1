@@ -2,7 +2,8 @@
   $ipInput,
   $portInput,
   $connTimeout=300,
-  $onlyTrueFlag=0
+  $onlyTrueFlag=0,
+  $updateOUIFlag=0
 )
 
 switch -wildcard ($ipInput)
@@ -136,6 +137,7 @@ function Get-MacFromIP($IPAddress)
 
 function pingSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
 {
+    $fileContent = Get-Content -Path ".\vendorlist.txt"
     foreach($ip in $ipsToScan)
     {
         $Ping = New-Object System.Net.NetworkInformation.Ping 
@@ -144,7 +146,12 @@ function pingSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
         If ($onlyTrueFlag -eq 1 -AND $reply.Status -eq "Success")  
         { 
             $mac = Get-MacFromIP $ip
-            Write-Host $ip "host up with MAC:" $mac 
+            Write-Host $ip "host up with MAC:" $mac
+            $mac = [string]$mac
+            $macSegments = $mac.Split(":")
+            $targetString = $macSegments[0] + "-" + $macSegments[1] + "-" + $macSegments[2]
+            $manufacturer = $fileContent | Select-String $targetString -Context 0,0
+            write-host $manufacturer
         } 
         elseif($onlyTrueFlag -eq 0 -AND $reply.Status -eq "Success")
         { 
@@ -290,6 +297,16 @@ function netBiosSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
     }
 }
 
-pingSweep $ipsToScan $connTimeout $onlyTrueFlag
-portSweep $ipsToScan $portsToQuery $connTimeout $onlyTrueFlag
-netBiosSweep $ipsToScan $connTimeout $onlyTrueFlag
+if($updateOUIFlag -eq 1)
+{
+    write-host "Downloading/updating the OUI database to the current folder vendorlist.txt, all other options ignored.  This can take a while"
+    $url = 'http://standards.ieee.org/develop/regauth/oui/oui.txt'
+    $outfile = ".\vendorlist.txt"
+    Invoke-WebRequest -Uri $url -OutFile $outfile
+}
+else
+{
+    pingSweep $ipsToScan $connTimeout $onlyTrueFlag
+    portSweep $ipsToScan $portsToQuery $connTimeout $onlyTrueFlag
+    netBiosSweep $ipsToScan $connTimeout $onlyTrueFlag
+}
