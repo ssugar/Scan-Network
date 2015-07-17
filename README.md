@@ -2,7 +2,7 @@
 Powershell Function to Scan a Network to determine if hosts are up, ports are open, ...
 
 ### Example Command
-    .\Scan-Network.ps1 -ipInput 192.168.1.1-255 -portInput topTcpPorts.txt -onlyTruFlag 1 -connTimeout 100
+    .\Scan-Network.ps1 -ipInput 192.168.1.1-255 -portInput topTcpPorts.txt -connTimeout 100
 	
 #### ipInput
  + null: all IPs in current subnet will be scanned
@@ -15,10 +15,9 @@ Powershell Function to Scan a Network to determine if hosts are up, ports are op
  + port range: ports in the range will be scanned, currently only accepts range in this format x-y (e.g. 1-100)
  + topTcpPorts.txt: will scan the ports listed in topTcpPorts.txt
 
-#### onlyTrueFlag
- + null or 0: all connection results will be returned
- + 1: only successfuly connection results will be returned
-
 #### connTimeout
  + null: default connection timeout is 300 ms
  + number: that number will be used as the connection timeout in ms.  Setting to 50 on a LAN should help you find open ports quickly. 
+ 
+#### Debug
+ Allows use of the -debug switch which will show all failed connections as well
