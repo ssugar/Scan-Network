@@ -358,14 +358,14 @@ function netTimeSweep($ipsToScan, $connTimeout)
 
 if($updateOuiList -eq 1)
 {
-    write-host "Downloading/updating the OUI database to the current folder vendorlist.txt, all other options ignored.  This can take a while"
+    write-host "Downloading/updating the OUI database to the current folder vendorlist.txt, all other non update options ignored.  This can take a while"
     $url = 'http://standards.ieee.org/develop/regauth/oui/oui.txt'
     $outfile = ".\vendorlist.txt"
     Invoke-WebRequest -Uri $url -OutFile $outfile
 }
 elseif($updatePortList -eq 1)
 {
-    write-host "Downloading/updating the Port List.  This can take a while"
+    write-host "Downloading/updating the port list to the current folder fullportlist.txt, all other non update options ignored.  This can take a while"
     $url = 'http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt'
     $outfile = ".\fullportlist.txt"
     Invoke-WebRequest -Uri $url -OutFile $outfile
