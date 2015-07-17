@@ -2,7 +2,6 @@
   $ipInput,
   $portInput,
   $connTimeout=300,
-  $onlyTrueFlag=0,
   $updateOuiList=0,
   $updatePortList=0
 )
@@ -146,33 +145,27 @@ function vendorLookup([string]$mac)
     return $manNameSegments[2]
 }
 
-function pingSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
+function pingSweep($ipsToScan, $connTimeout)
 {
     $fileContent = Get-Content -Path ".\vendorlist.txt"
     foreach($ip in $ipsToScan)
     {
         $Ping = New-Object System.Net.NetworkInformation.Ping 
         $reply = $Ping.Send($ip,$connTimeout) 
-        Write-Debug $reply 
-        If ($onlyTrueFlag -eq 1 -AND $reply.Status -eq "Success")  
+        If ($reply.Status -eq "Success")  
         { 
             $mac = Get-MacFromIP $ip
             $mac = [string]$mac
             $vendorName = vendorLookup $mac
             Write-Host $ip "host up with MAC:" $mac "(" $vendorName ")"
         } 
-        elseif($onlyTrueFlag -eq 0 -AND $reply.Status -eq "Success")
-        { 
-            $mac = Get-MacFromIP $ip
-            $mac = [string]$mac
-            $vendorName = vendorLookup $mac
-            Write-Host $ip "host up with MAC:" $mac "(" $vendorName ")"
-        }
-        elseif($reply.Status -eq "TimedOut" -and $onlyTrueFlag -eq 0)
+        else
         {
-            Write-Host $ip "host down"
-        }   
+            Write-debug "$ip host down"
+        }
+        write-progress -activity "Ping sweep in progress" -status "$ip" -Id 9
     }
+    write-progress -activity "Ping sweep completed" -status "completed" -completed -Id 9
 }
 
 function portLookup([int]$port)
@@ -186,7 +179,7 @@ function portLookup([int]$port)
     return $portNameSegments[0]
 }
 
-function portSweep($ipsToScan, $portsToQuery, $connTimeout, $onlyTrueFlag)
+function portSweep($ipsToScan, $portsToQuery, $connTimeout)
 {
     $portFileContent = Get-Content -Path ".\topTcpPorts.txt"
     foreach($ip in $ipsToScan)
@@ -198,23 +191,20 @@ function portSweep($ipsToScan, $portsToQuery, $connTimeout, $onlyTrueFlag)
             $portCheckOutput.BeginConnect($ip, $portToQuery, $null, $null) | Out-Null
             $Timeout = (Get-Date).AddMilliseconds($connTimeout)
             While (!$portCheckOutput.Connected -and (Get-Date) -lt $Timeout){Sleep -Milliseconds 25}
-            if($onlyTrueFlag -eq 1 -AND $portCheckOutput.Connected -eq $true)
+            if($portCheckOutput.Connected -eq $true)
             {
                 $portNameResult = portLookup $portToQuery
                 write-host $ip "port" $portToQuery "is open (" $portNameResult ")"
             }
-            elseif($onlyTrueFlag -eq 0 -AND $portCheckOutput.Connected -eq $true)
+            else
             {
-                $portNameResult = portLookup $portToQuery
-                write-host $ip "port" $portToQuery "is open (" $portNameResult ")"
-            }
-            elseif($onlyTrueFlag -eq 0 -AND $portCheckOutput.Connected -eq $false)
-            {
-                write-host $ip "port" $portToQuery "is closed"
+                write-debug "$ip port $portToQuery is closed"
             }
             $portCheckOutput.Close()
+            write-progress -activity "Port sweep in progress" -status "$ip $portToQuery" -Id 10
         }
     }
+    write-progress -activity "Port sweep completed" -status "completed" -completed -Id 10    
 }
 
 #Taken from http://myitpath.blogspot.com/2010/03/net-and-netbios-name-resolution.html
@@ -249,7 +239,7 @@ function convert-netbiosType([byte]$val) {
 }
 
 #Taken from http://myitpath.blogspot.com/2010/03/net-and-netbios-name-resolution.html
-function netBiosSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
+function netBiosSweep($ipsToScan, $connTimeout)
 {
     foreach($ip in $ipsToScan)
     {
@@ -271,10 +261,7 @@ function netBiosSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
         }
         if ($failed -eq 1 -and $rcvbytes.length -lt 63) 
         {
-            if($onlyTrueFlag -eq 0)
-            {
-                write-host $ip "is not responding to netbios requests"
-            }
+            write-debug "$ip is not responding to netbios requests"
         }
         else
         {
@@ -322,8 +309,52 @@ function netBiosSweep($ipsToScan, $connTimeout, $onlyTrueFlag)
             }
             $rcvbytes = $null
         }
+        write-progress -activity "NetBios sweep in progress" -status "$ip" -Id 11
+    }
+    write-progress -activity "NetBios sweep completed" -status "completed" -completed -Id 11
+}
+
+#taken from: chrisjwarwick.wordpress.com 
+function netTimeSweep($ipsToScan, $connTimeout)
+{
+    foreach($ip in $ipsToScan)
+    {
+        #$StartOfEpoch=New-Object DateTime(1900,1,1,0,0,0,[DateTimeKind]::Utc)   
+        $port = 123
+        $ipEP = new-object System.Net.IPEndPoint ([system.net.IPAddress]::parse($ip),$port)
+        [Byte[]]$NtpData = ,0 * 48
+        $NtpData[0] = 0x1B    # NTP Request header in first byte
+        $Socket = new-Object System.Net.Sockets.UdpClient
+        $Socket.Connect($ip)
+        $t1 = Get-Date    # Start of transaction... the clock is ticking..
+        $Socket.client.receivetimeout=1000
+
+        $bytesSent = $Socket.Send($NtpData,50,$ipEP)
+        $failed = 0
+        try
+        {
+            $rcvbytes = $Socket.Receive([ref]$ipEP)
+        }
+        catch
+        {
+            write-host "UDP Receive failed"
+        }
+        $t4 = Get-Date    # End of transaction time
+        $Socket.Close()
+        write-host $NtpData
+        #$IntPart = [BitConverter]::ToUInt32($NtpData[43..40],0)   # t3
+        #$FracPart = [BitConverter]::ToUInt32($NtpData[47..44],0)
+        #$t3ms = $IntPart * 1000 + ($FracPart * 1000 / 0x100000000)
+        #$IntPart = [BitConverter]::ToUInt32($NtpData[35..32],0)   # t2
+        #$FracPart = [BitConverter]::ToUInt32($NtpData[39..36],0)
+        #$t2ms = $IntPart * 1000 + ($FracPart * 1000 / 0x100000000)
+        #$t1ms = ([TimeZoneInfo]::ConvertTimeToUtc($t1) - $StartOfEpoch).TotalMilliseconds
+        #$t4ms = ([TimeZoneInfo]::ConvertTimeToUtc($t4) - $StartOfEpoch).TotalMilliseconds
+        #$Offset = (($t2ms - $t1ms) + ($t3ms-$t4ms))/2
+        #$StartOfEpoch.AddMilliseconds($t4ms + $Offset).ToLocalTime() 
     }
 }
+
 
 if($updateOuiList -eq 1)
 {
@@ -341,7 +372,8 @@ elseif($updatePortList -eq 1)
 }
 else
 {
-    pingSweep $ipsToScan $connTimeout $onlyTrueFlag
-    portSweep $ipsToScan $portsToQuery $connTimeout $onlyTrueFlag
-    netBiosSweep $ipsToScan $connTimeout $onlyTrueFlag
+    pingSweep $ipsToScan $connTimeout
+    portSweep $ipsToScan $portsToQuery $connTimeout
+    netBiosSweep $ipsToScan $connTimeout
+#    netTimeSweep $ipsToScan $connTimeout
 }
