@@ -248,7 +248,7 @@ function netBiosSweep($ipsToScan, $connTimeout)
         $ipEP = new-object System.Net.IPEndPoint ([system.net.IPAddress]::parse($ip),$port)
         $udpconn = new-Object System.Net.Sockets.UdpClient
         [byte[]] $sendbytes = (0xf4,0x53,00,00,00,01,00,00,00,00,00,00,0x20,0x43,0x4b,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41 ,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x41,00,00,0x21,00,01)
-        $udpconn.client.receivetimeout=1000
+        $udpconn.client.receivetimeout=$connTimeout
         $bytesSent = $udpconn.Send($sendbytes,50,$ipEP)
         $failed = 0
         try
@@ -314,47 +314,33 @@ function netBiosSweep($ipsToScan, $connTimeout)
     write-progress -activity "NetBios sweep completed" -status "completed" -completed -Id 11
 }
 
-#taken from: chrisjwarwick.wordpress.com 
 function netTimeSweep($ipsToScan, $connTimeout)
 {
     foreach($ip in $ipsToScan)
     {
-        #$StartOfEpoch=New-Object DateTime(1900,1,1,0,0,0,[DateTimeKind]::Utc)   
-        $port = 123
+        $port=123
         $ipEP = new-object System.Net.IPEndPoint ([system.net.IPAddress]::parse($ip),$port)
-        [Byte[]]$NtpData = ,0 * 48
-        $NtpData[0] = 0x1B    # NTP Request header in first byte
-        $Socket = new-Object System.Net.Sockets.UdpClient
-        $Socket.Connect($ip)
-        $t1 = Get-Date    # Start of transaction... the clock is ticking..
-        $Socket.client.receivetimeout=1000
-
-        $bytesSent = $Socket.Send($NtpData,50,$ipEP)
+        $udpconn = new-Object System.Net.Sockets.UdpClient
+        [Byte[]]$sendbytes = ,0 * 48
+        $sendbytes[0] = 0x1B #setting first byte with NTP client flag
+        $udpconn.client.sendtimeout=$connTimeout
+        $udpconn.client.receivetimeout=$connTimeout
+        $bytesSent = $udpconn.Send($sendbytes,48,$ipEP)
         $failed = 0
         try
         {
-            $rcvbytes = $Socket.Receive([ref]$ipEP)
+            $rcvbytes = $udpconn.Receive([ref]$ipEP)
+            write-host $ip "is responding to NTP requests"
         }
         catch
         {
-            write-host "UDP Receive failed"
+            write-debug "$ip is not responding to ntp requests"
         }
-        $t4 = Get-Date    # End of transaction time
-        $Socket.Close()
-        write-host $NtpData
-        #$IntPart = [BitConverter]::ToUInt32($NtpData[43..40],0)   # t3
-        #$FracPart = [BitConverter]::ToUInt32($NtpData[47..44],0)
-        #$t3ms = $IntPart * 1000 + ($FracPart * 1000 / 0x100000000)
-        #$IntPart = [BitConverter]::ToUInt32($NtpData[35..32],0)   # t2
-        #$FracPart = [BitConverter]::ToUInt32($NtpData[39..36],0)
-        #$t2ms = $IntPart * 1000 + ($FracPart * 1000 / 0x100000000)
-        #$t1ms = ([TimeZoneInfo]::ConvertTimeToUtc($t1) - $StartOfEpoch).TotalMilliseconds
-        #$t4ms = ([TimeZoneInfo]::ConvertTimeToUtc($t4) - $StartOfEpoch).TotalMilliseconds
-        #$Offset = (($t2ms - $t1ms) + ($t3ms-$t4ms))/2
-        #$StartOfEpoch.AddMilliseconds($t4ms + $Offset).ToLocalTime() 
+        $udpconn.Close()
+        write-progress -activity "NTP sweep in progress" -status "$ip" -Id 12
     }
+    write-progress -activity "NTP sweep completed" -status "Completed" -Completed -Id 12
 }
-
 
 if($updateOuiList -eq 1)
 {
@@ -375,5 +361,5 @@ else
     pingSweep $ipsToScan $connTimeout
     portSweep $ipsToScan $portsToQuery $connTimeout
     netBiosSweep $ipsToScan $connTimeout
-#    netTimeSweep $ipsToScan $connTimeout
+    netTimeSweep $ipsToScan $connTimeout
 }
