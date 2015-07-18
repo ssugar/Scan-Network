@@ -342,6 +342,132 @@ function netTimeSweep($ipsToScan, $connTimeout)
     write-progress -activity "NTP sweep completed" -status "Completed" -Completed -Id 12
 }
 
+function snmpSweep($ipsToScan, $connTimeout)
+{
+    foreach($ip in $ipsToScan)
+    {
+        $port=161
+        $ipEP = new-object System.Net.IPEndPoint ([system.net.IPAddress]::parse($ip),$port)
+        $udpconn = new-Object System.Net.Sockets.UdpClient
+        [Byte[]]$sendbytes = @(48,36,2,1,1,4,6,112,117,98,108,105,99,161,23,2,2,117,6,2,1,0,2,1,0,48,11,48,9,6,5,43,6,1,2,1,5,0)
+        $udpconn.client.sendtimeout=$connTimeout
+        $udpconn.client.receivetimeout=$connTimeout
+        $bytesSent = $udpconn.Send($sendbytes,$sendbytes.Length,$ipEP)
+        $failed = 0
+        try
+        {
+            $rcvbytes = $udpconn.Receive([ref]$ipEP)
+            write-host $ip "is responding to snmp requests"
+        }
+        catch
+        {
+            write-debug "$ip is not responding to snmp requests"
+        }
+        $udpconn.Close()
+        write-progress -activity "SNMP sweep in progress" -status "$ip" -Id 13
+    }
+    write-progress -activity "SNMP sweep completed" -status "Completed" -Completed -Id 13
+}
+
+#taken from http://www.indented.co.uk/2010/02/17/dhcp-discovery/
+Function New-DhcpDiscoverPacket
+{
+  Param(
+    [String]$MacAddressString = "AA:BB:CC:DD:EE:FF"
+  )
+ 
+  # Generate a Transaction ID for this request
+ 
+  $XID = New-Object Byte[] 4
+  $Random = New-Object Random
+  $Random.NextBytes($XID)
+ 
+  # Convert the MAC Address String into a Byte Array
+ 
+  # Drop any characters which might be used to delimit the string
+  #$MacAddressString = $MacAddressString -Replace "-|:|."
+  #$MacAddress = [BitConverter]::GetBytes($MacAddressString,[Globalization.NumberStyles]::HexNumber)
+  # Reverse the MAC Address array
+ 
+  # Create the Byte Array
+  $DhcpDiscover = New-Object Byte[] 243
+ 
+  # Copy the Transaction ID Bytes into the array
+  #[Array]::Copy($XID, 0, $DhcpDiscover, 4, 4)
+  
+  # Copy the MacAddress Bytes into the array (drop the first 2 bytes,
+  # too many bytes returned from UInt64)
+  #[Array]::Copy($MACAddress, 2, $DhcpDiscover, 28, 6)
+ 
+  # Set the OP Code to BOOTREQUEST
+  $DhcpDiscover[0] = 1
+  # Set the Hardware Address Type to Ethernet
+  $DhcpDiscover[1] = 1
+  # Set the Hardware Address Length (number of bytes)
+  $DhcpDiscover[2] = 6
+  # Set a "random" number
+  $DhcpDiscover[4] = 0
+  $DhcpDiscover[5] = 6
+  $DhcpDiscover[6] = 6
+  $DhcpDiscover[7] = 6
+  # Set the Broadcast Flag
+  $DhcpDiscover[10] = 0
+  # Set the Magic Cookie values
+  $DhcpDiscover[236] = 99
+  $DhcpDiscover[237] = 130
+  $DhcpDiscover[238] = 83
+  $DhcpDiscover[239] = 99
+  # Set the DHCPDiscover Message Type Option
+  $DhcpDiscover[240] = 53
+  $DhcpDiscover[241] = 1
+  $DhcpDiscover[242] = 1
+  
+  Return $DhcpDiscover
+}
+
+function dhcpSweep($ipsToScan, $connTimeout)
+{
+#    $UdpSocket = New-Object Net.Sockets.Socket([Net.Sockets.AddressFamily]::InterNetwork,[Net.Sockets.SocketType]::Dgram,[Net.Sockets.ProtocolType]::Udp)
+#    $EndPoint = [Net.EndPoint](New-Object Net.IPEndPoint($([Net.IPAddress]::Any, 68)))
+#    $UdpSocket.EnableBroadcast = $True
+#    $UdpSocket.ExclusiveAddressUse = $False
+#    $UdpSocket.SendTimeOut = 1000
+#    $UdpSocket.ReceiveTimeOut = 1000
+    # Listen on port 68
+#    $UdpSocket.Bind($EndPoint)
+    
+    foreach($ip in $ipsToScan)
+    {
+        $port=67
+        $ipEP = new-object System.Net.IPEndPoint ([system.net.IPAddress]::parse($ip),$port)
+        $udpconn = new-Object System.Net.Sockets.UdpClient
+        [Byte[]]$sendbytes = New-DhcpDiscoverPacket
+        $udpconn.client.sendtimeout=$connTimeout
+        $udpconn.client.receivetimeout=1000
+        write-host $sendbytes
+        $bytesSent = $udpconn.Send($sendbytes,$sendbytes.Length,$ipEP)
+        $failed = 0
+        try
+        {
+            $EndPoint = [Net.EndPoint](New-Object Net.IPEndPoint($([Net.IPAddress]::Any, 68)))
+            #Receive Buffer
+            #$ReceiveBuffer = New-Object Byte[] 1024
+            $BytesReceived = $udpconn.Receive([Ref]$EndPoint)
+            write-host $ip "is responding to dhcp requests"
+        }
+        catch
+        {
+            $ErrorMessage = $_.Exception.Message
+            write-host "$ip is not responding to dhcp requests $ErrorMessage"
+        }
+        $udpconn.Close()
+        write-progress -activity "DHCP sweep in progress" -status "$ip" -Id 13
+    }
+    write-progress -activity "DHCP sweep completed" -status "Completed" -Completed -Id 13
+    #$UdpSocket.Close()
+}
+
+
 if($updateOuiList -eq 1)
 {
     write-host "Downloading/updating the OUI database to the current folder vendorlist.txt, all other non update options ignored.  This can take a while"
@@ -362,4 +488,7 @@ else
     portSweep $ipsToScan $portsToQuery $connTimeout
     netBiosSweep $ipsToScan $connTimeout
     netTimeSweep $ipsToScan $connTimeout
+    snmpSweep $ipsToScan $connTimeout
+    #dhcpSweep $ipsToScan $connTimeout
+    #dnsSweep $ipsToScan $connTimeout
 }
